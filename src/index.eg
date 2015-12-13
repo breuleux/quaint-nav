@@ -1,0 +1,115 @@
+
+require:
+   path
+   fs
+   quaint ->
+      SeqDocument
+      etools ->
+         enode-to-data
+
+var gid = 0
+
+to-data{x} =
+   try:
+      enode-to-data{x, true}
+   catch e:
+      x
+
+
+compile-body{b} =
+   match to-data{b} as r:
+      ENode? -> b
+      Array? -> r.map{compile-body}
+      Map? ->
+         ;; new Map{r.entries{} each {k, v} -> {k, compile-body{v}}}
+         r2 = r.entries{} each {k, v} -> {key = k, value = compile-body{v}}
+         match r2:
+            {x} -> x
+            xs -> xs
+      else ->
+         r
+
+recreate{match x, is-li} =
+   Array? ->
+      l = ul % x each y -> recreate{y, true}
+      if{is-li, li % l, l}
+   {=> key, => value} ->
+      children =
+         div % key
+         recreate{value, false}
+      if is-li:
+         li.dropdown % children
+      else:
+         div.dropdown % children
+   when is-li ->
+      li % x
+   else ->
+      x
+
+
+;; compile-body{b} =
+;;    match to-data{b} as r:
+;;       ENode? -> {r}
+;;       Array? -> r.map{compile-subbody}
+;;       Map? -> dropdown{r}
+;;       else -> {r}
+
+;; compile-subbody{b} =
+;;    match to-data{b} as r:
+;;       Map? -> dropdown{r}
+;;       else -> b
+
+;; dropdown{r} =
+;;    res = r.entries{} each {key, value} ->
+;;       div.dropdown %
+;;          div % key
+;;          if{ENode? value, value, div % value}
+
+
+install{@, options} =
+
+   @register-resolvers with {
+      template = {
+         "@nav" => "[template :: @minimal][nav :: dump!][.container % {body}]"
+      }
+   }
+
+   @register-documents with {
+      nav = SeqDocument{}
+   }
+
+   @register-macros with {
+      nav{engine, position = null, body} =
+
+         if body.raw{}.trim{} === "dump!":
+            engine.deferred with {_, docs} ->
+               parts = {=}
+               docs.nav.entries{} each {name, entries} ->
+                  parts[name] or= {}
+                  parts[name] ++= entries
+               if parts == {=}:
+                  return ""
+               rval = nav.nav %
+                  items{parts} each {cls, contents} ->
+                     ul %
+                        class = cls
+                        contents each entry ->
+                           recreate{entry, true}
+               rval
+
+         else:
+            engine.into{"nav"} with {
+               if{position, position.raw{}, '__nav_{gid += 1}'}
+               Array! compile-body{engine.gen{body}}
+            }
+
+   }
+
+main{*match} =
+   {@, options = {=}} when @is-quaint-engine ->
+      install{@, options}
+   {options = {=}} ->
+      {@} -> main{@, options}
+
+provide = main
+
