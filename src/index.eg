@@ -16,33 +16,6 @@ to-data{x} =
    catch e:
       null
 
-hamburger-code = """
-  var ham = document.querySelector(".hamburger");
-  var nm = document.querySelector(".nav-main");
-  function toggleActive(elem) {
-    if (elem.className.indexOf(" active") !== -1)
-      elem.className = elem.className.replace(" active", "");
-    else
-      elem.className = elem.className + " active"
-  }
-  ham.click = ham.ontouchend = function (e) {
-    e.stopPropagation();
-    e.preventDefault();
-    toggleActive(ham);
-    toggleActive(nm);
-  }
-  var dropdowns = document.querySelectorAll(".dropdown");
-  for (var i = 0; i < dropdowns.length; i++) {
-    (function (elem) {
-      ham.click = elem.ontouchend = function (e) {
-        e.stopPropagation();
-        e.preventDefault();
-        toggleActive(elem);
-      }
-    })(dropdowns[i]);
-  }
-"""
-
 
 class NavFunctions:
 
@@ -120,11 +93,18 @@ install{@, _options} =
    }
 
    @register-resources with {
-      "script/nav/hamburger.js" => {
+      "js/nav.js" => {
+         path = path.join{__dirname, "../client/nav.js"}
+         contents = true
+         type = .js
+         method = .head
+      }
+      "js/nav.js/install" => {
          path = null
-         contents = hamburger-code
+         contents = "$$quaintNavFunctionality()"
          type = .js
          method = .body
+         inline = true
       }
    }
 
