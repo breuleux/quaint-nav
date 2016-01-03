@@ -4,17 +4,30 @@ require:
    fs
    quaint ->
       SeqDocument
-      etools ->
-         enode-to-data
-   lodash -> group-by
 
-var gid = 0
+provide:
+   dump-nav
 
-to-data{x} =
-   try:
-      enode-to-data{x, true}
-   catch e:
-      null
+
+defaults = {
+   nav-class-prefix = "nav-"
+   caret-class = "caret"
+   dropdown-class = "dropdown"
+   suppress-empty-nav = false
+}
+
+
+clean{match a} =
+   Array? ->
+      rval = a each entry when not R"^[ \n]*$"? entry ->
+         entry
+      match rval:
+         {x} -> clean{x}
+         else -> rval
+   R"^[ \n]*$"? ->
+      ""
+   else ->
+      a
 
 
 class NavFunctions:
@@ -22,59 +35,49 @@ class NavFunctions:
    constructor{@options} =
       pass
 
-   compile-body{b} =
-      match to-data{b} as r:
-         Array? ->
-            r.map{@compile-body.bind{@}}
-         Map? ->
-            ;; new Map{r.entries{} each {k, v} -> {k, compile-body{v}}}
-            r2 = r.entries{} each {k, v} -> {key = k, value = @compile-body{v}}
-            match r2:
-               {x} -> x
-               xs -> xs
-         when Array? b ->
-            match [b each x when x !== "" -> x]:
-               {match x} ->
-                  String? -> div % x
-                  else -> x
-               else -> div % b
-         else ->
-            b
-
-   recreate{match x, is-li} =
-      Array? ->
-         l = ul % x each y -> @recreate{y, true}
-         if{is-li, li % l, l}
-      {=> key, => value} ->
-         children = {
+   transform{orig and clean! match, li-tags, li-props} =
+      "" -> ""
+      {title, [ul %]? list} ->
+         ENode{li-tags ++ {".dropdown"}, li-props} with {
             div %
-               key
+               title
                if @options.caret-class:
                   then: span % class = @options.caret-class
                   else: ""
-            @recreate{value, false}
+            ENode{
+               list.tags
+               list.props
+               list.children each
+                  [li %]? child ->
+                     @transform{child.children, child.tags, child.props}
+                  other ->
+                     @transform{other, {"li"}, {=}}
+            }
          }
-         if is-li:
-            li %
-               class = @options.dropdown-class
-               children
-         else:
-            div %
-               class = @options.dropdown-class
-               children
-      when is-li ->
-         li % x
+      {tags => {"ul"}, => children} ->
+         children each
+            [li %]? child ->
+               @transform{child.children, child.tags, child.props}
+            other ->
+               @transform{other, {"li"}, {=}}
+      Array? or String? ->
+         ENode{li-tags, li-props, div % orig}
       else ->
-         x
+         ENode{li-tags, li-props, orig}
 
 
-defaults = {
-   leftmost = "nav-leftmost"
-   main = "nav-main"
-   rightmost = "nav-rightmost"
-   caret-class = "caret"
-   dropdown-class = "dropdown"
-}
+dump-nav{engine, position, options = {=}} =
+   engine.deferred with {_, docs} ->
+      entries = docs.nav.entries{} each
+         {name, entry} when name === position -> entry
+      if entries.length === 0 and options.suppress-empty-nav:
+         return ""
+      $nav %
+         name = position
+         ulonly = options.ulonly
+         entries each entry ->
+            $entry % engine.gen{entry}
+
 
 
 install{@, _options} =
@@ -82,73 +85,191 @@ install{@, _options} =
    options = _options & defaults
    nf = NavFunctions{options}
 
-   @register-resolvers with {
-      template = {
-         "@nav" => "[template :: @minimal][nav :: dump!][.container % {body}]"
-      }
-   }
-
    @register-documents with {
       nav = SeqDocument{}
    }
 
-   @register-resources with {
-      "js/nav.js" => {
-         path = path.join{__dirname, "../client/nav.js"}
-         contents = true
-         type = .js
-         method = .head
-      }
-      "js/nav.js/install" => {
-         path = null
-         contents = "$$quaintNavFunctionality()"
-         type = .js
-         method = .body
-         inline = true
-      }
+   @register-components with {
+      $nav{tags, props, children} =
+         var contents = {}
+         children each
+            [$entry %]? {=> children} ->
+               contents ++= Array! nf.transform{children, {"li"}, {=}}
+            what ->
+               contents ++= Array! nf.transform{what, {"li"}, {=}}
+         if props.ulonly:
+            ul % contents
+         else:
+            nav %
+               class = options.nav-class-prefix + props.name
+               id = options.nav-class-prefix + props.name
+               ul %
+                  contents
    }
 
    @register-macros with {
-      nav{engine, position = null, body} =
-
+      nav{engine, _position = null, body} =
+         position = if{_position, _position.raw{}, "main"}
          if body.raw{}.trim{} === "dump!":
-            engine.deferred with {_, docs} ->
-               parts = {=}
-               docs.nav.entries{} each {name, entries} ->
-                  parts[name] or= {}
-                  parts[name] ++= entries
-               if parts == {=}:
-                  return ""
-               groups = group-by{items{parts}} with {{match cls, contents}} ->
-                  R"leftmost"? when options.leftmost -> options.leftmost
-                  R"rightmost"? when options.rightmost -> options.rightmost
-                  else -> options.main
-               rval = nav.nav#nav %
-                  .hamburger %
-                     span.icon-bar %
-                     span.icon-bar %
-                     span.icon-bar %
-                  {options.leftmost, options.main, options.rightmost} each
-                     true? type ->
-                        let parts = groups[type] or {}
-                        elements =
-                           parts each {cls, contents} ->
-                              ul %
-                                 class = cls
-                                 contents each entry ->
-                                    nf.recreate{entry, true}
-                        div %
-                           class = type
-                           elements
-               rval
-
+            dump-nav{engine, position, options}
          else:
-            engine.into{"nav"} with {
-               if{position, position.raw{}, 'nav-group'}
-               Array! nf.compile-body{engine.gen{body}}
-            }
-
+            engine.into{"nav"} with {position, body}
    }
+
+
+
+
+
+
+
+
+;; to-data{x} =
+;;    try:
+;;       enode-to-data{x, true}
+;;    catch e:
+;;       null
+
+
+;; nav-template = """
+;; template :: @minimal
+;; nav main :: dump!
+;; nav mobile :: dump!
+;; .container % {body}
+;; """
+
+
+;; class NavFunctions:
+
+;;    constructor{@options} =
+;;       pass
+
+;;    compile-body{b} =
+;;       match to-data{b} as r:
+;;          Array? ->
+;;             r.map{@compile-body.bind{@}}
+;;          Map? ->
+;;             ;; new Map{r.entries{} each {k, v} -> {k, compile-body{v}}}
+;;             r2 = r.entries{} each {k, v} -> {key = k, value = @compile-body{v}}
+;;             match r2:
+;;                {x} -> x
+;;                xs -> xs
+;;          when Array? b ->
+;;             match [b each x when x !== "" -> x]:
+;;                {match x} ->
+;;                   String? -> div % x
+;;                   else -> x
+;;                else -> div % b
+;;          else ->
+;;             b
+
+;;    recreate{match x, is-li} =
+;;       Array? ->
+;;          l = ul % x each y -> @recreate{y, true}
+;;          if{is-li, li % l, l}
+;;       {=> key, => value} ->
+;;          children = {
+;;             div %
+;;                key
+;;                if @options.caret-class:
+;;                   then: span % class = @options.caret-class
+;;                   else: ""
+;;             @recreate{value, false}
+;;          }
+;;          if is-li:
+;;             li %
+;;                class = @options.dropdown-class
+;;                children
+;;          else:
+;;             div %
+;;                class = @options.dropdown-class
+;;                children
+;;       when is-li ->
+;;          li % x
+;;       else ->
+;;          x
+
+
+;; defaults = {
+;;    leftmost = "nav-leftmost"
+;;    main = "nav-main"
+;;    rightmost = "nav-rightmost"
+;;    caret-class = "caret"
+;;    dropdown-class = "dropdown"
+;; }
+
+
+;; install{@, _options} =
+
+;;    options = _options & defaults
+;;    nf = NavFunctions{options}
+
+;;    @register-resolvers with {
+;;       template = {
+;;          "@nav" => "[template :: @minimal][nav :: dump!][.container % {body}]"
+;;       }
+;;    }
+
+;;    @register-documents with {
+;;       nav = SeqDocument{}
+;;    }
+
+;;    @register-resources with {
+;;       "js/nav.js" => {
+;;          path = path.join{__dirname, "../client/nav.js"}
+;;          contents = true
+;;          type = .js
+;;          method = .head
+;;       }
+;;       "js/nav.js/install" => {
+;;          path = null
+;;          contents = "$$quaintNavFunctionality()"
+;;          type = .js
+;;          method = .body
+;;          inline = true
+;;       }
+;;    }
+
+;;    @register-macros with {
+;;       nav{engine, position = null, body} =
+
+;;          if body.raw{}.trim{} === "dump!":
+;;             engine.deferred with {_, docs} ->
+;;                parts = {=}
+;;                docs.nav.entries{} each {name, entries} ->
+;;                   parts[name] or= {}
+;;                   parts[name] ++= entries
+;;                if parts == {=}:
+;;                   return ""
+;;                groups = group-by{items{parts}} with {{match cls, contents}} ->
+;;                   R"leftmost"? when options.leftmost -> options.leftmost
+;;                   R"rightmost"? when options.rightmost -> options.rightmost
+;;                   else -> options.main
+;;                rval = nav.nav#nav %
+;;                   .hamburger %
+;;                      span.icon-bar %
+;;                      span.icon-bar %
+;;                      span.icon-bar %
+;;                   {options.leftmost, options.main, options.rightmost} each
+;;                      true? type ->
+;;                         let parts = groups[type] or {}
+;;                         elements =
+;;                            parts each {cls, contents} ->
+;;                               ul %
+;;                                  class = cls
+;;                                  contents each entry ->
+;;                                     nf.recreate{entry, true}
+;;                         div %
+;;                            class = type
+;;                            elements
+;;                rval
+
+;;          else:
+;;             engine.into{"nav"} with {
+;;                if{position, position.raw{}, 'nav-group'}
+;;                Array! nf.compile-body{engine.gen{body}}
+;;             }
+
+;;    }
 
 main{*match} =
    {@, options = {=}} when @is-quaint-engine ->
