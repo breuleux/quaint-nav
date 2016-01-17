@@ -11,9 +11,15 @@ provide:
 
 defaults = {
    nav-class-prefix = "nav-"
-   caret-class = "caret"
    dropdown-class = "dropdown"
+   dropdown-menu-class = "dropdown-menu"
    suppress-empty-nav = false
+   wrap-dropdown{title} = div % title
+   wrap-element{match x} =
+      String? or Array? ->
+         div % x
+      else ->
+         x
 }
 
 
@@ -38,14 +44,10 @@ class NavFunctions:
    transform{orig and clean! match, li-tags, li-props} =
       "" -> ""
       {title, [ul %]? list} ->
-         ENode{li-tags ++ {".dropdown"}, li-props} with {
-            div %
-               title
-               if @options.caret-class:
-                  then: span % class = @options.caret-class
-                  else: ""
+         ENode{li-tags ++ {"." + @options.dropdown-class}, li-props} with {
+            @options.wrap-dropdown{title}
             ENode{
-               list.tags
+               list.tags ++ {"." + @options.dropdown-menu-class}
                list.props
                list.children each
                   [li %]? child ->
@@ -60,10 +62,10 @@ class NavFunctions:
                @transform{child.children, child.tags, child.props}
             other ->
                @transform{other, {"li"}, {=}}
-      Array? or String? ->
-         ENode{li-tags, li-props, div % orig}
+      ;; Array? or String? ->
+      ;;    ENode{li-tags, li-props, div % orig}
       else ->
-         ENode{li-tags, li-props, orig}
+         ENode{li-tags, li-props, @options.wrap-element{orig}}
 
 
 dump-nav{engine, position, options = {=}} =
@@ -82,7 +84,7 @@ dump-nav{engine, position, options = {=}} =
 
 install{@, _options} =
 
-   options = _options & defaults
+   options = defaults & _options
    nf = NavFunctions{options}
 
    @register-documents with {
