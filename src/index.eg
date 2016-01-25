@@ -16,7 +16,7 @@ defaults = {
    suppress-empty-nav = false
    wrap-dropdown{title} = div % title
    wrap-element{match x} =
-      String? or Array? ->
+      String? ->
          div % x
       else ->
          x
