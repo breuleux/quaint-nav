@@ -1,7 +1,7 @@
 {
   "name": "quaint-nav",
   "description": "Navigation bar and macros for Quaint",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "format": "cjs",
   "repository": {
     "type": "git",
