@@ -9,7 +9,8 @@ any styling, so it is mostly useful for use by other plugins like
 
 ## Install
 
-    npm install quaint-nav -g
+    quaint --setup nav
+
 
 ## Macros
 
