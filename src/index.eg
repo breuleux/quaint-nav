@@ -2,8 +2,6 @@
 require:
    path
    fs
-   quaint ->
-      SeqDocument
 
 provide:
    dump-nav
@@ -14,7 +12,11 @@ defaults = {
    dropdown-class = "dropdown"
    dropdown-menu-class = "dropdown-menu"
    suppress-empty-nav = false
-   wrap-dropdown{title} = div % title
+   wrap-dropdown{match x} =
+      String? ->
+         div % x
+      else ->
+         x
    wrap-element{match x} =
       String? ->
          div % x
@@ -88,7 +90,7 @@ install{@, _options} =
    nf = NavFunctions{options}
 
    @register-documents with {
-      nav = SeqDocument{}
+      nav = @quaint.SeqDocument{}
    }
 
    @register-components with {
