@@ -112,12 +112,13 @@ install{@, _options} =
    }
 
    @register-macros with {
-      nav{engine, _position = null, body} =
-         position = if{_position, _position.raw{}, "main"}
-         if body.raw{}.trim{} === "dump!":
-            dump-nav{engine, position, options}
-         else:
-            engine.into{"nav"} with {position, body}
+      nav{engine, _positions = null, body} =
+         positions = if{_positions, _positions.raw{}, "main"}
+         positions.split{"|"} each position ->
+            if body.raw{}.trim{} === "dump!":
+               dump-nav{engine, position, options}
+            else:
+               engine.into{"nav"} with {position, body}
    }
 
 main{*match} =
