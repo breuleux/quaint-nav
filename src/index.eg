@@ -76,11 +76,16 @@ dump-nav{engine, position, options = {=}} =
          {name, entry} when name === position -> entry
       if entries.length === 0 and options.suppress-empty-nav:
          return ""
-      $nav %
-         name = position
-         ulonly = options.ulonly
-         entries each entry ->
-            $entry % engine.gen{entry}
+      res =
+         $nav %
+            name = position
+            ulonly = options.ulonly
+            entries each entry ->
+               $entry % engine.gen{entry}
+      if options.wrap:
+         options.wrap{res}
+      else:
+         res
 
 
 
