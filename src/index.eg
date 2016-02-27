@@ -11,7 +11,7 @@ defaults = {
    nav-class-prefix = "nav-"
    dropdown-class = "dropdown"
    dropdown-menu-class = "dropdown-menu"
-   suppress-empty-nav = false
+   suppress-empty-nav = true
    wrap-dropdown{match x} =
       String? ->
          div % x
@@ -70,7 +70,7 @@ class NavFunctions:
          ENode{li-tags, li-props, @options.wrap-element{orig}}
 
 
-dump-nav{engine, position, options = {=}} =
+dump-nav{engine, position, options = defaults} =
    engine.deferred with {_, docs} ->
       entries = docs.nav.entries{} each
          {name, entry} when name === position -> entry
